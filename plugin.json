@@ -1,0 +1,14 @@
+{
+	"description": "<p>http://zona.ru/<p>",
+	"author": "dashkodo", 
+	"homepage": "http://github.com/lprot/showtime-plugins",
+	"title": "zona.ru",
+	"synopsis": "zona ru",
+	"version": "0.0.1",
+        "file": "plugin.js",
+	"showtimeVersion": "4.8",
+	"type": "ecmascript",
+	"icon": "logo.png",
+	"id": "zona",
+	"category": "video"
+}
