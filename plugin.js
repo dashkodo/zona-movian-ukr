@@ -66,7 +66,7 @@
 						title: item.name_rus + '/' + item.name_original,
 						icon: 'https://img4.zona.mobi/images/film_240/' + item.id.toString().substring(0, 3) + "/" + item.id + '.jpg',
 						description: item.description
-					});
+					}).bindVideoMetadata({title: (item.name_original ? item.name_original : item.name_rus)});
 				}
 		}
 		page.loading = false;
