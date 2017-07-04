@@ -25,13 +25,25 @@
 
 	var settings = plugin.createSettings(pluginDescriptor.title, logo, pluginDescriptor.synopsis);
 
-	settings.createString('baseURL', "Base URL without '/' at the end", 'http://www.torrentino.online', function (v) {
-		service.baseURL = v;
+	settings.createString("userLanguage", "Preferable audio track language", "uk", function (v) {
+		service.userLanguage = v;
 	});
 
-	settings.createString("userCookie", "Cookie пользователя", "DONT_TOUCH_THIS", function (v) {
-		service.userCookie = v;
+	var magnetTrackers = null;
+
+    settings.createString("trackers", "Additional tracker list to use", "https://raw.githubusercontent.com/ngosang/trackerslist/master/trackers_best_ip.txt", function (v) {
+		try{
+			magnetTrackers = '&tr='+showtime.httpReq(v).toString().replace(/\n+/g, '&tr=');
+		}
+		catch (e) {
+
+		}
 	});
+
+	var urls = {
+		movies :'http://zsolr.zonasearch.com/solr/movie/select/?wt=json&',
+		torrents :'http://zsolr.zonasearch.com/solr/torrent/select/?wt=json&',
+	}
 
 	var blue = '6699CC',
 	orange = 'FFA500',
@@ -41,6 +53,18 @@
 	function colorStr(str, color) {
 		return '<font color="' + color + '">' + str + '</font>';
 	}
+
+	function mapSearchResults(page, movies){
+		for (var i = 0; i < movies.length; i++) {
+			var item = movies[i];
+			page.appendItem(plugin.getDescriptor().id + ":movie:" + item.id, "video", {
+				title: item.name_rus + '/' + item.name_original,
+				//icon: 'https://img4.zonapic.com/images/film_240/' + item.id.toString().substring(0, 3) + "/" + item.id + '.jpg',
+				description: item.description
+			}).bindVideoMetadata({title: (item.name_original ? item.name_original : item.name_rus)});
+		}
+	}
+
 
 	function setPageHeader(page, title) {
 		if (page.metadata) {
@@ -55,19 +79,10 @@
 	plugin.addURI(plugin.getDescriptor().id + ":start", function (page) {
 		setPageHeader(page, plugin.getDescriptor().synopsis);
 		page.loading = true;
-		var doc = showtime.httpReq('http://zsolr.zonasearch.com/solr/movie/select/?q=(playable:true)AND(serial:false)&rows=50&sort=id+desc&version=2.2&wt=json').toString();
+		var doc = showtime.httpReq(urls.movies+'q=(playable:true)AND(serial:false)AND(trailer:false)AND(gross:[1%20TO%20*])AND(seeds:[200%20TO%20*])&rows=50&sort=gross+desc').toString();
 		doc = showtime.JSONDecode(doc);
 		if (doc) {
-			var docs = doc.response.docs
-
-				for (var i = 0; i < docs.length; i++) {
-					var item = docs[i];
-					page.appendItem(plugin.getDescriptor().id + ":movie:" + item.id, "video", {
-						title: item.name_rus + '/' + item.name_original,
-						icon: 'https://img4.zona.mobi/images/film_240/' + item.id.toString().substring(0, 3) + "/" + item.id + '.jpg',
-						description: item.description
-					}).bindVideoMetadata({title: (item.name_original ? item.name_original : item.name_rus)});
-				}
+			mapSearchResults(page, doc.response.docs);
 		}
 		page.loading = false;
 	});
@@ -75,10 +90,11 @@
 	plugin.addURI(plugin.getDescriptor().id + ":movie:(.*)", function (page, id) {
 		setPageHeader(page, plugin.getDescriptor().synopsis);
 		page.loading = true;
-		var doc = showtime.httpReq('http://zsolr2.zonasearch.com/solr/torrent/select/?q=(kinopoisk_id:' + id + ')AND(languages_parser:*uk*)AND(playable:true)&wt=json').toString();
+		var allLanguagesQuery = urls.torrents+ 'q=(kinopoisk_id:' + id + ')AND(playable:true)';
+		var doc = showtime.httpReq(allLanguagesQuery +'AND(languages_parser:*'+service.userLanguage+'*)').toString();
 		doc = showtime.JSONDecode(doc);
 		if (doc.response.docs.length == 0) {
-			doc = showtime.httpReq('http://zsolr2.zonasearch.com/solr/torrent/select/?q=(kinopoisk_id:' + id + ')AND(playable:true)&wt=json').toString();
+			doc = showtime.httpReq(allLanguagesQuery).toString();
 			doc = showtime.JSONDecode(doc);
 		}
 
@@ -87,9 +103,13 @@
 
 				for (var i = 0; i < docs.length; i++) {
 					var item = docs[i];
-					page.appendItem('torrent:browse:' + item.torrent_download_link, "video", {
+					var magnetLink = item.torrent_download_link;
+					if(magnetTrackers!=null){
+						magnetLink+=magnetTrackers;
+					}
+					page.appendItem('torrent:browse:' + magnetLink, "video", {
 						title: item.resolution + '/' + Math.round(10 * item.size_bytes / (1024 * 1024 * 1024)) / 10 + 'Gb [' + item.languages_parser + '] ' + item.peers + '/' + item.seeds + ' ' + item.filenames,
-						icon: 'https://img4.zona.mobi/images/film_240/' + id.toString().substring(0, 3) + "/" + id + '.jpg',
+						icon: 'https://img4.zonapic.com/images/film_240/' + id.toString().substring(0, 3) + "/" + id + '.jpg',
 						description: item.description
 					});
 				}
@@ -106,25 +126,27 @@
 			if (!tryToSearch)
 				return false;
 			page.loading = true;
-			//http://zsolr.zonasearch.com/solr/movie/select/?q=(*)&sort=last_update+desc&version=2.2&wt=json
-			//movie http://zsolr2.zonasearch.com/solr/torrent/select/?q=(kinopoisk_id:694051)AND(languages_parser:*uk*)
-			var doc = showtime.httpReq('http://zsolr.zonasearch.com/solr/movie/select/?q=((name_rus:' + encodeURIComponent(query) + ')OR(name_original:' + encodeURIComponent(query) + '))AND(playable:true)&wt=json').toString();
+			query = query.split(' ')
+			var rusQuery = "";
+			var engQuery = "";
+			for(var i=0; i<query.length;query++){
+				var queryWord = query[i];
+			    var encodedQueryWord = encodeURIComponent(queryWord);
+				if(i>0){
+					rusQuery+='AND';
+					engQuery+='AND';
+				}
+				rusQuery+='(name_rus:' + encodedQueryWord + ')';
+				engQuery+='(name_original:' + encodedQueryWord + ')';
+			}
+			var doc = showtime.httpReq(urls.movies + 'q=((' + rusQuery + ')OR(' + engQuery + '))AND(playable:true)&rows=50&sort=gross+desc').toString();
 			console.log('search finished:' + doc);
 
 			doc = showtime.JSONDecode(doc);
 			if (doc) {
-				var docs = doc.response.docs
-
-					for (var i = 0; i < docs.length; i++) {
-						var item = docs[i];
-						page.appendItem(plugin.getDescriptor().id + ":movie:" + item.id, "video", {
-							title: item.name_rus + '/' + item.name_original,
-							icon: 'https://img4.zona.mobi/images/film_240/' + item.id.toString().substring(0, 3) + "/" + item.id + '.jpg',
-							description: item.description
-						});
-
-					}
-					page.entries = docs.length;
+				var docs = doc.response.docs;
+                mapSearchResults(page, docs);
+				page.entries = docs.length;
 			}
 
 			page.loading = false;
