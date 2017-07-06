@@ -4,7 +4,7 @@
 	"homepage": "https://github.com/dashkodo/zona-movian-ukr",
 	"title": "zona.ru",
 	"synopsis": "zona ru",
-	"version": "0.0.2",
+	"version": "0.0.3",
         "file": "plugin.js",
 	"showtimeVersion": "4.8",
 	"type": "ecmascript",
