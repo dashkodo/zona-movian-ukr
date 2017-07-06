@@ -79,7 +79,7 @@
 	plugin.addURI(plugin.getDescriptor().id + ":start", function (page) {
 		setPageHeader(page, plugin.getDescriptor().synopsis);
 		page.loading = true;
-		var doc = showtime.httpReq(urls.movies+'q=(playable:true)AND(serial:false)AND(trailer:false)AND(gross:[1%20TO%20*])AND(seeds:[200%20TO%20*])&rows=50&sort=gross+desc').toString();
+		var doc = showtime.httpReq(urls.movies+'q=(playable:true)AND(serial:false)AND(trailer:false)&rows=50&sort=popularity+desc').toString();
 		doc = showtime.JSONDecode(doc);
 		if (doc) {
 			mapSearchResults(page, doc.response.docs);
